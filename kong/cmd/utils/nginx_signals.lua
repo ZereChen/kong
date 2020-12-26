@@ -92,7 +92,7 @@ function _M.start(kong_conf)
     return nil, "nginx is already running in " .. kong_conf.prefix
   end
 
-  local cmd = fmt("%s -p %s -c %s", nginx_bin, kong_conf.prefix, "nginx.conf")
+  local cmd = fmt("%s -p %s -c %s", nginx_bin, kong_conf.prefix, "nginx-yx.conf")
 
   log.debug("starting nginx: %s", cmd)
 
@@ -126,7 +126,7 @@ function _M.check_conf(kong_conf)
   end
 
   local cmd = fmt("KONG_NGINX_CONF_CHECK=true %s -t -p %s -c %s",
-                  nginx_bin, kong_conf.prefix, "nginx.conf")
+                  nginx_bin, kong_conf.prefix, "nginx-yx.conf")
 
   log.debug("testing nginx configuration: %s", cmd)
 
@@ -158,7 +158,7 @@ function _M.reload(kong_conf)
   end
 
   local cmd = fmt("%s -p %s -c %s -s %s",
-                  nginx_bin, kong_conf.prefix, "nginx.conf", "reload")
+                  nginx_bin, kong_conf.prefix, "nginx-yx.conf", "reload")
 
   log.debug("reloading nginx: %s", cmd)
 

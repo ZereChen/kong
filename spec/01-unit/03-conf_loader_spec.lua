@@ -210,7 +210,7 @@ describe("Configuration loader", function()
     assert.equal("/usr/local/kong/logs/error.log", conf.nginx_err_logs)
     assert.equal("/usr/local/kong/logs/access.log", conf.nginx_acc_logs)
     assert.equal("/usr/local/kong/logs/admin_access.log", conf.admin_acc_logs)
-    assert.equal("/usr/local/kong/nginx.conf", conf.nginx_conf)
+    assert.equal("/usr/local/kong/nginx-yx.conf", conf.nginx_conf)
     assert.equal("/usr/local/kong/nginx-kong.conf", conf.nginx_kong_conf)
     assert.equal("/usr/local/kong/.kong_env", conf.kong_env)
     -- ssl default paths

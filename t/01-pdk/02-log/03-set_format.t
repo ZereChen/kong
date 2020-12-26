@@ -354,6 +354,6 @@ GET /t
 GET /t
 --- no_response_body
 --- error_log eval
-qr/\[kong\] \[%%namespace: my_namespace \| my_namespace, %%file_src: content_by_lua\(nginx.conf:\d+\) \| content_by_lua\(nginx.conf:\d+\), %%line_src: 14 \| 14, %%func_name my_func \| my_func, %%message hello world \| hello world\]/
+qr/\[kong\] \[%%namespace: my_namespace \| my_namespace, %%file_src: content_by_lua\(nginx-yx.conf:\d+\) \| content_by_lua\(nginx-yx.conf:\d+\), %%line_src: 14 \| 14, %%func_name my_func \| my_func, %%message hello world \| hello world\]/
 --- no_error_log
 [error]

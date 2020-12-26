@@ -24,7 +24,7 @@ command.
 Example usage:
  kong migrations up
  kong prepare -p /usr/local/kong -c kong.conf
- nginx -p /usr/local/kong -c /usr/local/kong/nginx.conf
+ nginx -p /usr/local/kong -c /usr/local/kong/nginx-yx.conf
 
 Options:
  -c,--conf       (optional string) configuration file
