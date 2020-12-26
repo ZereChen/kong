@@ -175,7 +175,9 @@ local function register_events()
 
   -- events dispatcher
 
-
+  -- 在对数据库进行crud时调 kong/db/dao/init.lua:1425:post_crud_event，会给当前 worker 发送一条本地 worker_events。
+  -- 当本地 worker 监听有 worker_events 事件后，就会触发这个回调。
+  -- ipc 来完成本机其他 worker 的更新。
   worker_events.register(function(data)
     if not data.schema then
       log(ERR, "[events] missing schema in crud subscriber")
@@ -194,6 +196,7 @@ local function register_events()
     local cache_obj = kong[constants.ENTITY_CACHE_STORE[data.schema.name]]
 
     if cache_key then
+      -- 回调: 负责驱逐本地缓存并发布cluster_events到数据库。kong/cache.lua:354
       cache_obj:invalidate(cache_key)
     end
 
@@ -949,7 +952,7 @@ return {
       end
 
       update_lua_mem(true)
-
+      -- 注册通知
       register_events()
 
 

@@ -173,6 +173,7 @@ function _M.new(opts)
         neg_ttl          = max(opts.neg_ttl or 300,  0),
         resurrect_ttl    = opts.resurrect_ttl or 30,
         resty_lock_opts  = opts.resty_lock_opts,
+        -- ipc 来完成其他 worker 的更新。
         ipc = {
           register_listeners = function(events)
             for _, event_t in pairs(events) do
@@ -211,7 +212,7 @@ function _M.new(opts)
     shm_names         = shm_names,
     curr_mlcache      = curr_mlcache,
   }
-
+  -- 订阅cluster_events。当一台机器上只有一个 worker 收到cluster_events后，就会驱逐本地缓存。同样由 IPC 负责完成其他 worker 的更新操作
   local ok, err = self.cluster_events:subscribe("invalidations", function(key)
     log(DEBUG, "received invalidate event from cluster for key: '", key, "'")
     self:invalidate_local(key)
@@ -354,7 +355,7 @@ function _M:invalidate(key, shadow)
   if type(key) ~= "string" then
     error("key must be a string", 2)
   end
-
+  -- 删除缓存
   self:invalidate_local(key, shadow)
 
   if shadow then
@@ -362,7 +363,7 @@ function _M:invalidate(key, shadow)
   end
 
   log(DEBUG, "broadcasting (cluster) invalidation for key: '", key, "'")
-
+  -- 发布cluster_events到数据库
   local ok, err = self.cluster_events:broadcast("invalidations", key)
   if not ok then
     log(ERR, "failed to broadcast cached entity invalidation: ", err)

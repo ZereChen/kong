@@ -178,7 +178,7 @@ function _M:broadcast(channel, data, delay)
   return true
 end
 
-
+-- 订阅的实现：本质上是开定期任务定期去拉取。不同的 channel (订阅内容)是共享一个 timer 实现。
 function _M:subscribe(channel, cb, start_polling)
   if type(channel) ~= "string" then
     return error("channel must be a string")
@@ -203,7 +203,6 @@ function _M:subscribe(channel, cb, start_polling)
 
   if not self.polling and start_polling and self.use_polling then
     -- start recurring polling timer
-
     local ok, err = timer_at(self.poll_interval, poll_handler, self)
     if not ok then
       return nil, "failed to start polling timer: " .. err
@@ -297,7 +296,7 @@ local function poll(self)
     min_at = now - self.event_ttl_shm
     log(CRIT, "no 'at' in shm, polling events from: ", min_at)
   end
-
+  -- poll是按照时间窗口查询的，保证每次 poll 驱逐的只是一部分缓存，从而有效的避免了 dog-pile 效应的产生。
   for rows, err, page in self.strategy:select_interval(self.channels, min_at) do
     if err then
       return nil, "failed to retrieve events from DB: " .. err
@@ -338,6 +337,7 @@ local function get_lock(self)
   -- we still add an exptime to this lock in case something goes horribly
   -- wrong, to ensure other workers can poll new events
   -- a poll cannot take more than max(poll_interval * 5, 10) -- 10s min
+  --POLL_RUNNING_LOCK_KEY：保证同一时刻只有一个 worker 可以 poll 数据库改动；同时还能够保证上一次 poll 未完成时，下一轮 poll 则不会启动。并且一次 poll 执行的最长时间不能超过max(poll_interval * 5, 10)
   local ok, err = self.shm:safe_add(POLL_RUNNING_LOCK_KEY, true,
                                     max(self.poll_interval * 5, 10))
   if not ok then
@@ -355,6 +355,10 @@ local function get_lock(self)
     -- check if interval of `poll_interval` has elapsed already, to ensure
     -- we do not run the poll when a previous poll was quickly executed, but
     -- another worker got the timer trigger a bit too late.
+
+    --INTERVAL_LOCK 是用来保证不同 worker 之间不会发生 poll_interval 偏移问题。
+    --例如，一个 worker 刚刚执行完成一轮 poll 后，另一个 worker 此时恰巧触发 poll 执行。那么从这个节点的角度来看，这个 poll 的 poll_interval 实际上是没有生效的，看起来就像是发生了偏移。
+    --这个锁通过设置过期时间来解决这个问题。值得一提的是这个过期时间比 poll_interval 的时间略小一点点，是因为 poll_interval = poll + acquire lock，我猜测 Kong 这里是保守的考虑了抢锁的时间了。
     ok, err = self.shm:safe_add(POLL_INTERVAL_LOCK_KEY, true,
                                 self.poll_interval - 0.001)
     if not ok then
@@ -374,7 +378,7 @@ local function get_lock(self)
   return true
 end
 
-
+--加锁来保证一个节点中只要一个 worker 拉取数据库
 poll_handler = function(premature, self)
   if premature or not self.polling then
     -- set self.polling to false to stop a polling loop
@@ -391,7 +395,7 @@ poll_handler = function(premature, self)
   end
 
   -- single worker
-
+  -- 拉取
   local pok, perr, err = pcall(poll, self)
   if not pok then
     log(ERR, "poll() threw an error: ", perr)

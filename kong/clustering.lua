@@ -454,7 +454,6 @@ function _M.init_worker(conf)
     assert(shdict, "kong_clustering shdict missing")
 
     -- ROLE = "control_plane"
-
     kong.worker_events.register(function(data)
       -- we have to re-broadcast event using `post` because the dao
       -- events were sent using `post_local` which means not all workers

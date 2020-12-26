@@ -1421,7 +1421,7 @@ function DAO:row_to_entity(row, options)
   return entity
 end
 
-
+-- 产生worker_events
 function DAO:post_crud_event(operation, entity, old_entity, options)
   if options and options.no_broadcast_crud_event then
     return

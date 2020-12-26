@@ -419,13 +419,14 @@ end
 
 local Kong = {}
 
-
+-- Kong 的初始化。比如：数据层（DAO）的创建、路由的创建、插件的预加载
 function Kong.init()
   reset_kong_shm()
 
   -- special math.randomseed from kong.globalpatches not taking any argument.
   -- Must only be called in the init or init_worker phases, to avoid
   -- duplicated seeds.
+  -- 重写 math.randomseed，让它优先使用 OpenSSL 生成的种子，如果失败了再用 ngx.now()*1000 + ngx.worker.pid() 替代，主要是为了解决 PRNG 随机数的问题，背景知识可以参考这里正确认识随机数.另外还做了些小 hack，比如：将 init_worker 阶段中的 sleep 替换为阻塞式的 sleep 以解决这个阶段不能 yield 的问题。
   math.randomseed()
 
   local pl_path = require "pl.path"
@@ -438,11 +439,14 @@ function Kong.init()
   end
 
   -- retrieve kong_config
+  -- 加载 .kong_env 配置文件
   local conf_path = pl_path.join(ngx.config.prefix(), ".kong_env")
   local config = assert(conf_loader(conf_path, nil, { from_kong_env = true }))
 
+  -- 加载 pdk，用户可以通过全局变量访问插件开发工具包，例如 kong.request、kong.log。 https://www.jianshu.com/p/bf7f7bfb0639
   kong_global.init_pdk(kong, config, nil) -- nil: latest PDK
 
+  -- 加载 db并初始化连接
   local db = assert(DB.new(config))
   assert(db:init_connector())
 
@@ -460,11 +464,12 @@ function Kong.init()
                         schema_state.pending_migrations)
     end
   end
-
+  -- db 连接
   assert(db:connect())
   assert(db.plugins:check_db_against_config(config.loaded_plugins))
 
   -- LEGACY
+  -- Kong 会把他们缓存在 singletons 中。singletons 可以理解为一个容器，用于承载之后各个 worker 中的需要模块，主要是为了解决不同模块之间的数据共享问题。
   singletons.dns = dns(config)
   singletons.configuration = config
   singletons.db = db
@@ -482,6 +487,7 @@ function Kong.init()
   end
 
   -- Load plugins as late as possible so that everything is set up
+  -- 加载插件的schema
   assert(db.plugins:load_plugin_schemas(config.loaded_plugins))
 
   if kong.configuration.database == "off" then
@@ -501,6 +507,7 @@ function Kong.init()
       error("error building initial plugins: " .. tostring(err))
     end
 
+    --加载路由。路由信息其实是缓存在 core 里的，也就是由 core/handler.lua 来提供。
     assert(runloop.build_router("init"))
   end
 
@@ -514,12 +521,13 @@ function Kong.init_worker()
   -- special math.randomseed from kong.globalpatches not taking any argument.
   -- Must only be called in the init or init_worker phases, to avoid
   -- duplicated seeds.
+  -- 第一个动作就是设置 worker 的随机种子，利用上个阶段被重写的 math.randomseed() 函数来完成。至于为什么不在上个阶段就完成种子的设置，是因为在 init 阶段还没有开始 fork worker，如果设置了种子，根据 fork 的 COW 特性会导致之后所有的 worker 的种子都是一样的。因此这个动作只能在这个阶段来完成。
   math.randomseed()
 
 
   -- init DB
 
-
+  -- 初始化db
   local ok, err = kong.db:init_worker()
   if not ok then
     stash_init_worker_error("failed to instantiate 'kong.db' module: " .. err)
@@ -538,7 +546,7 @@ function Kong.init_worker()
               list_migrations(schema_state.pending_migrations))
     end
   end
-
+  -- 初始化worker_events, 实现 worker 之间的事件
   local worker_events, err = kong_global.init_worker_events()
   if not worker_events then
     stash_init_worker_error("failed to instantiate 'kong.worker_events' " ..
@@ -546,7 +554,7 @@ function Kong.init_worker()
     return
   end
   kong.worker_events = worker_events
-
+  -- 初始化cluster_events, 实现 cluster 节点之间的事件
   local cluster_events, err = kong_global.init_cluster_events(kong.configuration, kong.db)
   if not cluster_events then
     stash_init_worker_error("failed to instantiate 'kong.cluster_events' " ..
@@ -554,7 +562,7 @@ function Kong.init_worker()
     return
   end
   kong.cluster_events = cluster_events
-
+  -- 初始化cache，cluster_events和worker_events
   local cache, err = kong_global.init_cache(kong.configuration, cluster_events, worker_events)
   if not cache then
     stash_init_worker_error("failed to instantiate 'kong.cache' module: " ..
@@ -562,7 +570,7 @@ function Kong.init_worker()
     return
   end
   kong.cache = cache
-
+  -- 初始化core_cache，cluster_events和worker_events
   local core_cache, err = kong_global.init_core_cache(kong.configuration, cluster_events, worker_events)
   if not core_cache then
     stash_init_worker_error("failed to instantiate 'kong.core_cache' module: " ..
@@ -571,6 +579,7 @@ function Kong.init_worker()
   end
   kong.core_cache = core_cache
 
+  -- 将路由版本信息的缓存置为 init。这里为什么不把路由信息缓存？很简单，无法解决序列化问题，所以只能缓存在 Lua Land 下。
   ok, err = runloop.set_init_versions_in_cache()
   if not ok then
     stash_init_worker_error(err) -- 'err' fully formatted
@@ -607,7 +616,7 @@ function Kong.init_worker()
     stash_init_worker_error("failed to build the plugins iterator: " .. err)
     return
   end
-
+  -- 执行所有预加载插件的 init_worker()
   local plugins_iterator = runloop.get_plugins_iterator()
   execute_plugins_iterator(plugins_iterator, "init_worker")
 
