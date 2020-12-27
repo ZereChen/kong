@@ -507,7 +507,7 @@ function Kong.init()
       error("error building initial plugins: " .. tostring(err))
     end
 
-    --加载路由。路由信息其实是缓存在 core 里的，也就是由 core/handler.lua 来提供。
+    -- init阶段构建路由信息并缓存在 core 里。
     assert(runloop.build_router("init"))
   end
 
@@ -601,7 +601,7 @@ function Kong.init_worker()
     stash_init_worker_error("failed to load declarative config file: " .. err)
     return
   end
-
+  -- 加载 dao 层的 dto 对象到缓存
   ok, err = execute_cache_warmup(kong.configuration)
   if not ok then
     ngx_log(ngx_ERR, "failed to warm up the DB cache: " .. err)

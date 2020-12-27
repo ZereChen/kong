@@ -645,7 +645,7 @@ do
     return kong.core_cache:get("router:version", TTL_ZERO, utils.uuid)
   end
 
-
+  -- 构建路由信息
   build_router = function(version)
     local db = kong.db
     local routes, i = {}, 0
@@ -655,6 +655,7 @@ do
     -- still not ready. For those cases, use a plain Lua table as a cache
     -- instead
     local services_init_cache = {}
+    -- init阶段会走这逻辑。
     if not kong.core_cache and db.strategy ~= "off" then
       services_init_cache, err = build_services_init_cache(db)
       if err then
@@ -665,12 +666,14 @@ do
 
     local counter = 0
     local page_size = db.routes.pagination.page_size
+    -- 查询 db
     for route, err in db.routes:each(nil, GLOBAL_QUERY_OPTS) do
       if err then
         return nil, "could not load routes: " .. err
       end
 
       if db.strategy ~= "off" then
+        -- 版本更新
         if kong.core_cache and counter > 0 and counter % page_size == 0 then
           local new_version, err = get_router_version()
           if err then
@@ -682,7 +685,7 @@ do
           end
         end
       end
-
+      -- 构建 route 和 service 关系
       if should_process_route(route) then
         local service, err = get_service_for_route(db, route, services_init_cache)
         if err then
@@ -1091,7 +1094,9 @@ return {
       end
 
       -- routing request
+      -- 重建路由表
       local router = get_updated_router()
+      -- 开始匹配
       local match_t = router.exec()
       if not match_t then
         return kong.response.exit(404, { message = "no Route matched with those values" })

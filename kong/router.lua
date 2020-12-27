@@ -1140,9 +1140,9 @@ function _M.new(routes)
   -- when hash lookup in plain_indexes fails, those are arrays
   -- of regexes for `uris` as prefixes and `hosts` as wildcards
   -- or IP ranges comparison functions
-  local prefix_uris    = {} -- will be sorted by length
-  local regex_uris     = {}
-  local wildcard_hosts = {}
+  local prefix_uris    = {} -- will be sorted by length uri前缀
+  local regex_uris     = {} -- uri正则表达式
+  local wildcard_hosts = {} -- 主机头通配符
   local src_trust_funcs = {}
   local dst_trust_funcs = {}
 
@@ -1394,7 +1394,7 @@ function _M.new(routes)
 
     -- cache lookup (except for headers-matched Routes)
     -- if trigger headers match rule, ignore routes cache
-
+    -- 从缓存里面查询匹配结果。如果缓存里面有数据，则匹配成功
     local cache_key = req_method .. "|" .. req_uri .. "|" .. req_host ..
                       "|" .. ctx.src_ip .. "|" .. ctx.src_port ..
                       "|" .. ctx.dst_ip .. "|" .. ctx.dst_port ..
